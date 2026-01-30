@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facebook Marketplace Extractor - Com Ordenação</title>
+    <title>Facebook Marketplace Extractor - Com Busca</title>
     <style>
         * {
             margin: 0;
@@ -186,6 +186,38 @@
             font-weight: bold;
         }
 
+        /* Estilo da Barra de Busca */
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+            max-width: 400px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 15px 12px 45px;
+            border: 2px solid #eee;
+            border-radius: 8px;
+            font-size: 1em;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 8px rgba(102, 126, 234, 0.2);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2em;
+            color: #aaa;
+            pointer-events: none;
+        }
+
         .table-wrapper {
             overflow-x: auto;
             border-radius: 8px;
@@ -331,11 +363,11 @@
     <div class="container">
         <div class="header">
             <h1>📊 Facebook Marketplace Extractor</h1>
-            <p>Extraia dados de arquivos HAR e organize em tabelas com imagens e ordenação</p>
+            <p>Extraia dados de arquivos HAR e organize em tabelas com imagens, ordenação e busca</p>
         </div>
 
         <div class="info">
-            <strong>Dica:</strong> Clique nos cabeçalhos da tabela para ordenar os resultados de A-Z ou Z-A.
+            <strong>Dica:</strong> Use a barra de busca abaixo para filtrar anúncios pelo título. Clique nos cabeçalhos da tabela para ordenar.
         </div>
 
         <div class="error" id="errorMessage"></div>
@@ -364,7 +396,14 @@
                 <h2>Resultados</h2>
                 <span class="results-count" id="itemCount">0 itens</span>
             </div>
-            <div class="button-group">
+            
+            <!-- Barra de Busca com Lupa -->
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="Pesquisar na coluna título..." onkeyup="filterTable()">
+            </div>
+
+            <div class="button-group" style="margin-bottom: 20px;">
                 <button class="btn-download" id="downloadCsv">📥 Baixar CSV</button>
                 <button class="btn-download" id="downloadJson">📥 Baixar JSON</button>
             </div>
@@ -407,6 +446,7 @@
         const itemCount = document.getElementById('itemCount');
         const downloadCsvBtn = document.getElementById('downloadCsv');
         const downloadJsonBtn = document.getElementById('downloadJson');
+        const searchInput = document.getElementById('searchInput');
 
         // Event Listeners
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -468,6 +508,7 @@
                         showError('Nenhum dado de Marketplace encontrado no arquivo HAR.');
                     } else {
                         currentSort = { column: -1, direction: 'asc' };
+                        searchInput.value = ''; // Limpar busca ao processar novo arquivo
                         resetSortHeaders();
                         displayResults();
                         showSuccess(`${extractedData.length} itens extraídos com sucesso!`);
@@ -605,6 +646,28 @@
             }
         }
 
+        // Função de Filtro (Busca por Título)
+        function filterTable() {
+            const filter = searchInput.value.toLowerCase();
+            const rows = tableBody.getElementsByTagName('tr');
+            let visibleCount = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                const titleCell = rows[i].getElementsByTagName('td')[1]; // Coluna Título é a segunda (índice 1)
+                if (titleCell) {
+                    const textValue = titleCell.textContent || titleCell.innerText;
+                    if (textValue.toLowerCase().indexOf(filter) > -1) {
+                        rows[i].style.display = "";
+                        visibleCount++;
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+            itemCount.textContent = `${visibleCount} itens (filtrados)`;
+            if (!filter) itemCount.textContent = `${extractedData.length} itens`;
+        }
+
         // Função de Ordenação
         function sortTable(columnIndex) {
             const headers = document.querySelectorAll('th');
@@ -643,6 +706,7 @@
             });
 
             displayResults();
+            filterTable(); // Reaplicar filtro após ordenação
         }
 
         function resetSortHeaders() {
@@ -678,10 +742,11 @@
 
         // Funções de Download
         function downloadCSV() {
-            if (extractedData.length === 0) return;
+            const visibleData = getVisibleData();
+            if (visibleData.length === 0) return;
 
             const headers = ['Imagem URL', 'Título', 'Preço', 'Localização', 'Categoria ID', 'Link'];
-            const rows = extractedData.map(item => [
+            const rows = visibleData.map(item => [
                 item.Imagem,
                 item.Título,
                 item.Preço,
@@ -695,14 +760,21 @@
                 csv += row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
             }
 
-            downloadFile(csv, 'marketplace_items_ordenados.csv', 'text/csv');
+            downloadFile(csv, 'marketplace_items_filtrados.csv', 'text/csv');
         }
 
         function downloadJSON() {
-            if (extractedData.length === 0) return;
+            const visibleData = getVisibleData();
+            if (visibleData.length === 0) return;
 
-            const json = JSON.stringify(extractedData, null, 2);
-            downloadFile(json, 'marketplace_items_ordenados.json', 'application/json');
+            const json = JSON.stringify(visibleData, null, 2);
+            downloadFile(json, 'marketplace_items_filtrados.json', 'application/json');
+        }
+
+        function getVisibleData() {
+            const filter = searchInput.value.toLowerCase();
+            if (!filter) return extractedData;
+            return extractedData.filter(item => item.Título.toLowerCase().includes(filter));
         }
 
         function downloadFile(content, filename, type) {
@@ -724,6 +796,7 @@
             fileInput.value = '';
             fileName.textContent = '';
             tableBody.innerHTML = '';
+            searchInput.value = '';
             processBtn.disabled = true;
             resultsSection.style.display = 'none';
             resetSortHeaders();
