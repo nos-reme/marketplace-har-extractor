@@ -1,1 +1,0 @@
-# marketplace-har-extractor
